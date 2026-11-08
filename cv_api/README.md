@@ -239,21 +239,18 @@ docker run -it --rm -p 1883:1883 eclipse-mosquitto:2 \
   mosquitto -c /mosquitto-no-auth.conf
 ```
 
-### Option B: Docker Compose (recommended — brings up everything)
+### Option B: Docker Compose dashboard (idle until a source is selected)
 
 ```bash
-# Generate the demo video once, locally (it's git-ignored, not baked into the image):
-python scripts/generate_demo_video.py --output demo-media/demo.mp4
-
 docker compose up --build
 ```
 
-This starts four containers:
+This starts Mosquitto, FastAPI, and the React dashboard. No video pipeline
+starts automatically. The UI starts a pipeline job after a user uploads a
+file or connects an RTSP camera.
 
 - `mosquitto` — the MQTT broker (port 1883), configured for local/dev use
   via `config/mosquitto.conf`.
-- `analytics` — the pipeline, reading `demo-media/demo.mp4` (mounted in)
-  and publishing events to `mosquitto`.
 - `dashboard` — the FastAPI app, subscribed to the same broker, serving
   the original plain-HTML live UI at
   [http://localhost:8000](http://localhost:8000).
@@ -262,10 +259,8 @@ This starts four containers:
   [http://localhost:5173](http://localhost:5173), reverse-proxying its API/WS
   calls to `dashboard`.
 
-To point the analytics service at a real camera instead of the demo
-video, edit `camera.source` in `config/pipeline.yaml` to an RTSP URL (see
-the comments in that file for common vendor path conventions), then
-rebuild/restart the `analytics` service.
+The `analytics` service remains available under the opt-in
+`standalone-pipeline` Compose profile for explicit command-line use.
 
 ## Dashboard
 

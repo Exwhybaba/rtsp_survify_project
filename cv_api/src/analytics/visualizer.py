@@ -3,6 +3,9 @@
 
 from __future__ import annotations
 
+import logging
+import time
+from pathlib import Path
 from typing import Any
 
 # Pylint cannot inspect members exposed by OpenCV's compiled extension module.
@@ -11,6 +14,8 @@ import cv2
 import numpy as np
 
 from src.analytics.tracker import TrackedObject
+
+logger = logging.getLogger(__name__)
 
 
 class Visualizer:
@@ -38,6 +43,9 @@ class Visualizer:
             "Suvirfy Live Monitoring",
         )
         self.output_path = config.get("output_path")
+        self.live_frame_path = config.get("live_frame_path")
+        self._live_frame_fps = max(1.0, float(config.get("live_frame_fps", 8.0)))
+        self._last_live_frame_at = 0.0
         self._writer: cv2.VideoWriter | None = None
         self._output_fps = float(config.get("output_fps", 10.0))
 
@@ -97,6 +105,12 @@ class Visualizer:
                     )
             self._writer.write(display)
 
+        if self.live_frame_path:
+            now = time.monotonic()
+            if now - self._last_live_frame_at >= 1.0 / self._live_frame_fps:
+                self._last_live_frame_at = now
+                self._write_live_frame(display)
+
         if not self.enabled:
             return True
 
@@ -108,6 +122,20 @@ class Visualizer:
             return False
 
         return True
+
+    def _write_live_frame(self, frame: np.ndarray) -> None:
+        """Atomically publish the latest processed frame for the dashboard."""
+        try:
+            success, encoded = cv2.imencode(".jpg", frame)
+            if not success:
+                return
+            path = Path(self.live_frame_path)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            temporary = path.with_name(f"{path.stem}.tmp{path.suffix}")
+            temporary.write_bytes(encoded.tobytes())
+            temporary.replace(path)
+        except OSError:
+            logger.warning("Could not publish live frame to %s", self.live_frame_path)
 
     def _draw_shoplifting_observations(
         self,

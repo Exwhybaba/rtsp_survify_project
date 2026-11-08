@@ -27,17 +27,15 @@ ByteTrack stable person IDs
         |       after-hours, line crossing, occupancy
         |
         +--> Shoplifting analyzer
-                person crop
-                -> YOLO11x-pose keypoints
-                -> 34 normalized COCO x/y features
-                -> ShopliftingNet classifier
-                -> per-track temporal smoothing
+                person pose keypoints
+                -> wrist-to-torso concealment heuristic
+                -> per-track temporal confirmation
                 -> suspected_shoplifting
 
 VisionEvent
         |
         +--> EvidenceCapture
-        |       annotated snapshot immediately
+        |       original snapshot immediately
         |       clip asynchronously
         |
         +--> MQTT publisher
@@ -109,8 +107,8 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\start_suvirfy.ps1
 ```
 
-It starts Mosquitto on `1883`, FastAPI on `8000`, Vite/React on `5173`,
-and the configured CV pipeline. It checks duplicate listeners, verifies
+It starts Mosquitto on `1883`, FastAPI on `8000`, and Vite/React on `5173`.
+It does not start a video source. It checks duplicate listeners, verifies
 FastAPI health, opens the dashboard, and writes logs to `runtime-logs\`.
 
 Open the dashboard manually at:
@@ -119,10 +117,9 @@ Open the dashboard manually at:
 http://127.0.0.1:5173
 ```
 
-Options:
+Option:
 
 ```powershell
-.\start_suvirfy.ps1 -NoPipeline
 .\start_suvirfy.ps1 -NoBrowser
 ```
 
@@ -167,19 +164,24 @@ cd C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api
 .\.venv\Scripts\python.exe -c "import cv2; u='rtsp://CAMERA_URL'; c=cv2.VideoCapture(u); print('opened=', c.isOpened()); ok, frame=c.read(); print('first_frame=', ok, None if frame is None else frame.shape); c.release()"
 ```
 
-Start the services without the configured file pipeline:
+Start the services. They remain idle until a source is started from the UI:
 
 ```powershell
 cd C:\Users\HomePC\Documents\suvirfy\rtsp-yolo
-.\start_suvirfy.ps1 -NoPipeline
+.\start_suvirfy.ps1
 ```
 
-Then run the live-camera process in another PowerShell:
+In the dashboard, choose **RTSP camera**, enter the URL and camera/site IDs,
+then select **Connect camera**. The monitor shows annotated frames from that
+same pipeline. **Disconnect** requests a graceful stop and evidence flush.
+
+For a command-line-only pipeline, explicitly pass its source:
 
 ```powershell
 cd C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api
 .\.venv\Scripts\python.exe -m src.analytics.pipeline `
-  --config .\config\pipeline-live-camera.yaml
+  --config .\config\pipeline-live-camera.yaml `
+  --source "rtsp://192.168.1.50:554/Streaming/Channels/101"
 ```
 
 For an initial headless stability test:
@@ -218,6 +220,17 @@ shoplifting:
   cooldown_seconds: 30.0
 ```
 
+The detector's YOLO confidence threshold, the pose model's keypoint
+confidence, and the shoplifting concealment score are separate values. The
+shoplifting score is a geometric heuristic in the 0–1 range, not a calibrated
+probability. An event currently requires at least three scores at or above
+`classification_threshold` within the five-second observation window.
+Evidence is captured after that event is confirmed. The independent
+`evidence.shoplifting_min_concealment_score` defaults to `0.0`, so it does not discard
+confirmed incidents. A `0.7` evidence cutoff may hide lower-scoring clips and
+snapshots without stopping the corresponding event alert; validate a threshold
+against labeled footage before raising it.
+
 ## 7. Validate the use case
 
 Check the CV log for:
@@ -245,10 +258,10 @@ post-roll period. The current local MVP has no automatic retention policy.
 
 ### Dashboard-controlled video and RTSP jobs
 
-Start the API and frontend without the default YAML pipeline:
+Start the API and frontend; no source starts automatically:
 
 ```powershell
-.\start_suvirfy.ps1 -NoPipeline
+.\start_suvirfy.ps1
 ```
 
 Open `http://127.0.0.1:5173`, then use **Start an analysis** to choose
@@ -263,11 +276,10 @@ after processing. Uploads are limited to 500 MB by default
 (`SUVIRFY_MAX_UPLOAD_BYTES`), and one source job runs at a time by default
 (`SUVIRFY_MAX_CONCURRENT_JOBS=1`).
 
-Each dashboard job also passes its selected source directly to the pipeline
-process with `--source`. It therefore cannot fall back to the source in the
-shared YAML file. Use `-NoPipeline` as shown above; otherwise the launcher
-will also run the configured demo source (`demo-media/shoplifting3.mp4`) and
-its events may appear alongside the uploaded-job events.
+Each dashboard job passes its selected source directly to the pipeline
+process with `--source`; an empty source in the shared YAML prevents fallback
+to a demo video. The standalone pipeline is opt-in in Docker Compose and in
+the launch scripts.
 
 RTSP jobs accept only `rtsp://` and `rtsps://` URLs. This is a local MVP
 feature: it has no authentication, tenant isolation, persistent job store, or

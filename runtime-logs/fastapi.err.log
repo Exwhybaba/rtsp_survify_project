@@ -1,14 +1,94 @@
-INFO:     Started server process [23960]
+INFO:     Started server process [10232]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
 INFO:     connection open
-INFO:     127.0.0.1:61719 - "WebSocket /ws/live" [accepted]
+INFO:     127.0.0.1:53895 - "WebSocket /ws/live" [accepted]
 INFO:     connection open
-INFO:     127.0.0.1:60425 - "WebSocket /ws/live" [accepted]
+INFO:     127.0.0.1:53291 - "WebSocket /ws/live" [accepted]
 INFO:     connection open
-INFO:     127.0.0.1:57948 - "WebSocket /ws/live" [accepted]
+INFO:     127.0.0.1:53445 - "WebSocket /ws/live" [accepted]
 INFO:     connection open
-INFO:     127.0.0.1:63747 - "WebSocket /ws/live" [accepted]
+INFO:     127.0.0.1:60224 - "WebSocket /ws/live" [accepted]
 INFO:     connection open
-INFO:     127.0.0.1:49528 - "WebSocket /ws/live" [accepted]
+INFO:     127.0.0.1:57208 - "WebSocket /ws/live" [accepted]
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\.venv\Lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 422, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\.venv\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\.venv\Lib\site-packages\fastapi\applications.py", line 1194, in __call__
+    await super().__call__(scope, receive, send)
+  File "C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\.venv\Lib\site-packages\starlette\applications.py", line 96, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\.venv\Lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\.venv\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\.venv\Lib\site-packages\fastapi\telemetry\_asgi.py", line 151, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\.venv\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\.venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\.venv\Lib\site-packages\starlette\routing.py", line 683, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\.venv\Lib\site-packages\fastapi\routing.py", line 2811, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\.venv\Lib\site-packages\fastapi\routing.py", line 1330, in handle
+    await super().handle(scope, receive, send)
+  File "C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\.venv\Lib\site-packages\starlette\routing.py", line 289, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\.venv\Lib\site-packages\fastapi\routing.py", line 166, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\.venv\Lib\site-packages\fastapi\routing.py", line 153, in app
+    await response(scope, receive, send)
+  File "C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\.venv\Lib\site-packages\starlette\responses.py", line 278, in __call__
+    async with create_collapsing_task_group() as task_group:
+  File "C:\Users\HomePC\AppData\Local\Programs\Python\Python311\Lib\contextlib.py", line 231, in __aexit__
+    await self.gen.athrow(typ, value, traceback)
+  File "C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\.venv\Lib\site-packages\starlette\_utils.py", line 112, in create_collapsing_task_group
+    raise exc from exc.__cause__ or context
+  File "C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\.venv\Lib\site-packages\anyio\_core\_tasks.py", line 327, in _run_coro
+    retval = await self._coro
+             ^^^^^^^^^^^^^^^^
+  File "C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\.venv\Lib\site-packages\starlette\responses.py", line 281, in wrap
+    await func()
+  File "C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\.venv\Lib\site-packages\starlette\responses.py", line 255, in stream_response
+    async for chunk in self.body_iterator:
+  File "C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\.venv\Lib\site-packages\starlette\concurrency.py", line 57, in iterate_in_threadpool
+    yield await anyio.to_thread.run_sync(_next, as_iterator)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\.venv\Lib\site-packages\anyio\to_thread.py", line 65, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 2779, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 1124, in run
+    result = context.run(func, *args)
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\.venv\Lib\site-packages\starlette\concurrency.py", line 46, in _next
+    return next(iterator)
+           ^^^^^^^^^^^^^^
+  File "C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\src\dashboard\api.py", line 532, in frames
+    payload = frame_path.read_bytes()
+              ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\HomePC\AppData\Local\Programs\Python\Python311\Lib\pathlib.py", line 1050, in read_bytes
+    with self.open(mode='rb') as f:
+         ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\HomePC\AppData\Local\Programs\Python\Python311\Lib\pathlib.py", line 1044, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'C:\\Users\\HomePC\\Documents\\suvirfy\\rtsp-yolo\\cv_api\\runtime-jobs\\9d640067-4209-44fc-bfa1-0ad60949a8cc\\live.jpg'

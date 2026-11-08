@@ -1,11 +1,7 @@
 version: "3.9"
 
-# Three services: the MQTT broker events flow through, the analytics
-# pipeline that produces them, and the dashboard that consumes/relays
-# them to a browser. Run `python scripts/generate_demo_video.py` once
-# locally before `docker compose up` so demo-media/demo.mp4 exists for
-# the analytics container to read (it's git-ignored, so it must be
-# generated, not pulled from source control).
+# The dashboard starts analytics jobs when an operator selects a source.
+# The standalone analytics service is opt-in for CLI-only deployments.
 services:
   mosquitto:
     image: eclipse-mosquitto:2
@@ -16,6 +12,7 @@ services:
     restart: unless-stopped
 
   analytics:
+    profiles: ["standalone-pipeline"]
     build: .
     depends_on:
       - mosquitto
@@ -23,7 +20,6 @@ services:
       MQTT_HOST: mosquitto
       MQTT_PORT: "1883"
     volumes:
-      - ./demo-media:/app/demo-media:ro
       - ./config:/app/config:ro
       - ./evidence:/app/evidence
     command: ["python", "-m", "src.analytics.pipeline", "--config", "config/pipeline.yaml"]
@@ -39,7 +35,8 @@ services:
       MQTT_TOPIC: analytics/events
       EVIDENCE_DIR: /app/evidence
     volumes:
-      - ./evidence:/app/evidence:ro
+      - ./evidence:/app/evidence
+      - ./runtime-jobs:/app/runtime-jobs
     ports:
       - "8000:8000"
     command: ["uvicorn", "src.dashboard.api:app", "--host", "0.0.0.0", "--port", "8000"]

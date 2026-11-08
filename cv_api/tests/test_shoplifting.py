@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import torch
@@ -7,7 +7,6 @@ import torch
 from src.analytics.shoplifting import (
     ShopliftingAnalyzer,
     ShopliftingConfig,
-    ShopliftingNet,
 )
 from src.analytics.tracker import TrackedObject
 
@@ -102,26 +101,45 @@ def test_checkout_observation_suppresses_suspicion() -> None:
     ) == []
 
 
-def test_exact_checkpoint_matches_shoplifting_architecture() -> None:
-    checkpoint = Path("models/shoplifting/shoplifting_model.pth")
-    state_dict = torch.load(checkpoint, map_location="cpu", weights_only=True)
-    model = ShopliftingNet()
-    model.load_state_dict(state_dict)
-    model.eval()
-    assert tuple(model(torch.zeros((1, 34))).shape) == (1, 1)
+def _pose_result(wrist_x: float = 30.0):
+    keypoints = np.zeros((17, 3), dtype=np.float32)
+    keypoints[5] = (20, 100, 0.9)
+    keypoints[6] = (40, 100, 0.9)
+    keypoints[11] = (20, 200, 0.9)
+    keypoints[12] = (40, 200, 0.9)
+    keypoints[9] = (wrist_x, 150, 0.9)
+    keypoints[10] = (wrist_x, 150, 0.9)
+
+    class Boxes:
+        xyxy = torch.tensor([[10.0, 100.0, 50.0, 220.0]])
+
+        def __len__(self):
+            return 1
+
+    return SimpleNamespace(
+        boxes=Boxes(),
+        keypoints=SimpleNamespace(data=torch.from_numpy(keypoints[None, ...])),
+    )
 
 
-def test_pose_features_preserve_coco_xy_order() -> None:
-    class Keypoints:
-        xyn = torch.arange(34, dtype=torch.float32).reshape(1, 17, 2) / 34
-        conf = None
+class FakePoseModel:
+    def __init__(self, results):
+        self.results = list(results)
+        self._last = self.results[-1]
 
-    class Result:
-        keypoints = Keypoints()
+    def predict(self, *_args, **_kwargs):
+        result = self.results.pop(0) if self.results else self._last
+        return [result]
 
-    features = ShopliftingAnalyzer._pose_features(Result(), 0.0)
-    assert features is not None
-    np.testing.assert_allclose(features, Keypoints.xyn[0].numpy().reshape(34))
+
+def test_concealment_score_tracks_wrist_distance_from_torso() -> None:
+    analyzer = ShopliftingAnalyzer(ShopliftingConfig(enabled=True), "default")
+    keypoints = _pose_result().keypoints.data[0].numpy()
+    assert analyzer._concealment_score(keypoints) == 1.0
+
+    keypoints[9, 0] = 75
+    keypoints[10, 0] = 75
+    assert analyzer._concealment_score(keypoints) == 0.5
 
 
 def test_missing_pose_is_not_classified() -> None:
@@ -132,9 +150,15 @@ def test_missing_pose_is_not_classified() -> None:
         }
     )
     analyzer = ShopliftingAnalyzer(config, "default")
-    analyzer._classifier = object()
-    analyzer._pose_model = object()
-    analyzer._classify = lambda _crop: None
+    class EmptyBoxes:
+        xyxy = torch.empty((0, 4))
+
+        def __len__(self):
+            return 0
+
+    analyzer._pose_model = FakePoseModel(
+        [SimpleNamespace(boxes=EmptyBoxes(), keypoints=SimpleNamespace(data=torch.empty((0, 17, 3))))]
+    )
     events = analyzer.evaluate(
         "cam1",
         [tracked(1, 10)],
@@ -156,10 +180,7 @@ def test_temporal_aggregation_is_per_track_and_requires_sustained_predictions() 
         }
     )
     analyzer = ShopliftingAnalyzer(config, "default")
-    analyzer._classifier = object()
-    analyzer._pose_model = object()
-    values = iter([0.9, 0.9, 0.9, 0.9])
-    analyzer._classify = lambda _crop: next(values)
+    analyzer._pose_model = FakePoseModel([_pose_result(), _pose_result(), _pose_result()])
     frame = np.zeros((300, 700, 3), dtype=np.uint8)
     start = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
@@ -177,7 +198,7 @@ def test_temporal_aggregation_is_per_track_and_requires_sustained_predictions() 
         frame=frame,
     )
     assert len(events) == 1
-    assert events[0].metadata["shoplifting_probability"] == 0.9
+    assert events[0].metadata["concealment_score"] == 1.0
 
     assert analyzer.evaluate(
         "cam1",

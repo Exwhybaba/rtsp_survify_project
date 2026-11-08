@@ -11,6 +11,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
+import yaml
 from fastapi.testclient import TestClient
 
 import src.dashboard.api as api_module
@@ -224,3 +225,136 @@ def test_clip_endpoint_supports_full_and_range_reads(tmp_path, monkeypatch) -> N
     assert partial.status_code == 206
     assert partial.headers["content-range"] == "bytes 2-5/10"
     assert partial.content == b"2345"
+
+
+def test_live_stream_serves_annotated_job_frames(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(api_module, "JOB_ROOT", tmp_path)
+    job_id = str(uuid4())
+    job_dir = tmp_path / job_id
+    job_dir.mkdir()
+    frame = job_dir / "live.jpg"
+    frame.write_bytes(b"jpeg-frame")
+    api_module.JOBS[job_id] = {
+        "job_id": job_id,
+        "status": "completed",
+        "live_frame_path": str(frame),
+    }
+
+    try:
+        with TestClient(app) as client:
+            response = client.get(f"/api/jobs/{job_id}/stream")
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("multipart/x-mixed-replace")
+        assert b"Content-Type: image/jpeg" in response.content
+        assert b"jpeg-frame" in response.content
+    finally:
+        api_module.JOBS.pop(job_id, None)
+
+
+def test_stop_job_requests_graceful_pipeline_shutdown(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(api_module, "JOB_ROOT", tmp_path)
+    job_id = str(uuid4())
+    api_module.JOBS[job_id] = {"job_id": job_id, "status": "running"}
+
+    try:
+        with TestClient(app) as client:
+            response = client.post(f"/api/jobs/{job_id}/stop")
+        assert response.status_code == 200
+        assert response.json()["status"] == "stopping"
+        assert (tmp_path / job_id / "stop.request").is_file()
+    finally:
+        api_module.JOBS.pop(job_id, None)
+
+
+def test_job_status_does_not_expose_source_credentials(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(api_module, "JOB_ROOT", tmp_path)
+    job_id = str(uuid4())
+    job_dir = tmp_path / job_id
+    job_dir.mkdir()
+    frame = job_dir / "live.jpg"
+    frame.write_bytes(b"jpeg-frame")
+    api_module.JOBS[job_id] = {
+        "job_id": job_id,
+        "source_kind": "rtsp",
+        "status": "running",
+        "source": "rtsp://operator:secret@camera/live",
+        "live_frame_path": str(frame),
+    }
+
+    try:
+        with TestClient(app) as client:
+            response = client.get(f"/api/jobs/{job_id}")
+        assert response.status_code == 200
+        assert "source" not in response.json()
+        assert "secret" not in response.text
+        assert isinstance(response.json()["last_frame_at"], float)
+    finally:
+        api_module.JOBS.pop(job_id, None)
+
+
+def test_rtsp_job_uses_selected_source_without_persisting_credentials(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(api_module, "JOB_ROOT", tmp_path)
+    monkeypatch.setattr(
+        api_module,
+        "_base_pipeline_config",
+        lambda: {"camera": {"id": "default", "site_id": "default", "source": ""}},
+    )
+    started = []
+    monkeypatch.setattr(
+        api_module,
+        "_start_job",
+        lambda job_id, config_path, source: started.append((job_id, config_path, source)),
+    )
+
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/jobs/rtsp",
+                data={
+                    "source": "rtsp://operator:secret@camera/live",
+                    "camera_id": "front-door",
+                    "site_id": "site-a",
+                },
+            )
+        assert response.status_code == 200
+        assert response.json()["status"] == "starting"
+        assert "secret" not in response.text
+        assert started[0][2] == "rtsp://operator:secret@camera/live"
+        persisted = yaml.safe_load(Path(started[0][1]).read_text(encoding="utf-8"))
+        assert persisted["camera"]["source"] == ""
+        assert "secret" not in Path(started[0][1]).read_text(encoding="utf-8")
+    finally:
+        if started:
+            api_module.JOBS.pop(started[0][0], None)
+
+
+def test_upload_job_uses_uploaded_file_as_its_pipeline_source(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(api_module, "JOB_ROOT", tmp_path)
+    monkeypatch.setattr(
+        api_module,
+        "_base_pipeline_config",
+        lambda: {"camera": {"id": "default", "site_id": "default", "source": ""}},
+    )
+    started = []
+    monkeypatch.setattr(
+        api_module,
+        "_start_job",
+        lambda job_id, config_path, source: started.append((job_id, config_path, source)),
+    )
+
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/jobs/upload",
+                data={"camera_id": "upload-test", "site_id": "site-a"},
+                files={"file": ("incident.mp4", b"video-data", "video/mp4")},
+            )
+        assert response.status_code == 200
+        assert response.json()["status"] == "starting"
+        assert started[0][2].endswith("input.mp4")
+        assert Path(started[0][2]).read_bytes() == b"video-data"
+        persisted = yaml.safe_load(Path(started[0][1]).read_text(encoding="utf-8"))
+        assert persisted["camera"]["source"] == ""
+    finally:
+        if started:
+            api_module.JOBS.pop(started[0][0], None)

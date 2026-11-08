@@ -31,6 +31,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 from collections import deque
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -228,7 +229,7 @@ def get_events() -> list[dict[str, Any]]:
 def _active_job_count() -> int:
     return sum(
         1 for job in JOBS.values()
-        if job["status"] in {"queued", "running"}
+        if job["status"] in {"starting", "queued", "running", "stopping", "finalizing"}
     )
 
 
@@ -260,6 +261,10 @@ def _start_job(job_id: str, config_path: Path, source: str) -> None:
         str(config_path),
         "--source",
         source,
+        "--stop-file",
+        str(JOB_ROOT / job_id / "stop.request"),
+        "--started-file",
+        str(JOB_ROOT / job_id / "source.started"),
     ]
     with log_path.open("w", encoding="utf-8") as log:
         process = subprocess.Popen(
@@ -271,16 +276,32 @@ def _start_job(job_id: str, config_path: Path, source: str) -> None:
         )
     with JOB_LOCK:
         JOB_PROCESSES[job_id] = process
-        JOBS[job_id]["status"] = "running"
         JOBS[job_id]["pid"] = process.pid
 
     def monitor() -> None:
+        started_path = JOB_ROOT / job_id / "source.started"
+        while process.poll() is None:
+            if started_path.is_file():
+                with JOB_LOCK:
+                    job = JOBS.get(job_id)
+                    if job is not None and job["status"] == "starting":
+                        job["status"] = "running"
+            time.sleep(0.1)
         return_code = process.wait()
         with JOB_LOCK:
             job = JOBS.get(job_id)
+            stop_requested = bool(job and job["status"] in {"stopping", "stopped"})
+            if job is not None and return_code == 0 and not stop_requested:
+                job["status"] = "finalizing"
+        if return_code == 0:
+            _make_job_video_browser_compatible(job_id)
+        with JOB_LOCK:
+            job = JOBS.get(job_id)
             if job is not None:
-                if job["status"] != "stopped":
+                if job["status"] not in {"stopped", "stopping"}:
                     job["status"] = "completed" if return_code == 0 else "failed"
+                elif job["status"] == "stopping":
+                    job["status"] = "stopped"
                 job["return_code"] = return_code
             JOB_PROCESSES.pop(job_id, None)
         input_path = JOB_ROOT / job_id
@@ -300,13 +321,26 @@ def _create_job(config: dict[str, Any], source_kind: str) -> dict[str, Any]:
         config.setdefault("visualization", {})["output_path"] = str(
             JOB_ROOT / job_id / "annotated.mp4"
         )
-        config_path = _write_job_config(job_id, config)
+        config["visualization"]["live_frame_path"] = str(
+            JOB_ROOT / job_id / "live.jpg"
+        )
+        config["visualization"]["live_frame_fps"] = 8
+        config["control"] = {
+            **config.get("control", {}),
+            "stop_file": str(JOB_ROOT / job_id / "stop.request"),
+        }
+        stored_config = {
+            **config,
+            "camera": {**config.get("camera", {}), "source": ""},
+        }
+        config_path = _write_job_config(job_id, stored_config)
         job = {
             "job_id": job_id,
             "source_kind": source_kind,
-            "status": "queued",
+            "status": "starting",
             "config_path": str(config_path),
             "video_path": config.get("visualization", {}).get("output_path"),
+            "live_frame_path": config.get("visualization", {}).get("live_frame_path"),
             "source": str(config.get("camera", {}).get("source", "")),
         }
         JOBS[job_id] = job
@@ -318,6 +352,67 @@ def _create_job(config: dict[str, Any], source_kind: str) -> dict[str, Any]:
             JOBS[job_id]["error"] = str(exc)
         raise HTTPException(status_code=500, detail="could not start analysis job") from exc
     return job
+
+
+def _public_job(job: dict[str, Any]) -> dict[str, Any]:
+    """Return safe dashboard status without source URLs or internal paths."""
+    result = {
+        key: job[key]
+        for key in ("job_id", "source_kind", "status", "error")
+        if key in job
+    }
+    live_frame_path = job.get("live_frame_path")
+    try:
+        result["last_frame_at"] = Path(live_frame_path).stat().st_mtime if live_frame_path else None
+    except OSError:
+        result["last_frame_at"] = None
+    return result
+
+
+def _make_job_video_browser_compatible(job_id: str) -> None:
+    """Re-encode a completed recording for browser seeking when FFmpeg exists."""
+    with JOB_LOCK:
+        job = JOBS.get(job_id)
+        raw_path = job.get("video_path") if job else None
+    ffmpeg = shutil.which("ffmpeg")
+    if not isinstance(raw_path, str) or not ffmpeg:
+        return
+    source = Path(raw_path).resolve()
+    try:
+        source.relative_to((JOB_ROOT / job_id).resolve())
+    except ValueError:
+        logger.error("Refusing to re-encode a job video outside its job directory")
+        return
+    if not source.is_file():
+        return
+    output = source.with_name(f"{source.stem}.h264.mp4")
+    result = subprocess.run(
+        [
+            ffmpeg,
+            "-y",
+            "-i",
+            str(source),
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-movflags",
+            "+faststart",
+            str(output),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0 or not output.is_file():
+        logger.warning("Could not prepare browser-compatible job video %s", source)
+        output.unlink(missing_ok=True)
+        return
+    source.unlink(missing_ok=True)
+    with JOB_LOCK:
+        job = JOBS.get(job_id)
+        if job is not None:
+            job["video_path"] = str(output)
 
 
 @app.post("/api/jobs/upload")
@@ -365,7 +460,7 @@ async def upload_video(
     config["visualization"]["output_path"] = str(job_dir / "annotated.mp4")
     config["visualization"]["output_fps"] = 10
     try:
-        return _create_job(config, "upload")
+        return _public_job(_create_job(config, "upload"))
     except Exception:
         shutil.rmtree(job_dir, ignore_errors=True)
         raise
@@ -392,7 +487,7 @@ def start_rtsp_job(
     }
     config["visualization"] = {"enabled": False}
     config["visualization"]["output_fps"] = 10
-    return _create_job(config, "rtsp")
+    return _public_job(_create_job(config, "rtsp"))
 
 
 @app.get("/api/jobs/{job_id}")
@@ -401,7 +496,60 @@ def get_job(job_id: str) -> dict[str, Any]:
         job = JOBS.get(job_id)
         if job is None:
             raise HTTPException(status_code=404, detail="job not found")
-        return dict(job)
+        return _public_job(job)
+
+
+@app.get("/api/jobs/{job_id}/stream")
+def get_job_live_stream(job_id: str) -> StreamingResponse:
+    """Stream the latest annotated frame produced by the active pipeline."""
+    with JOB_LOCK:
+        job = JOBS.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="job not found")
+        raw_path = job.get("live_frame_path")
+    if not isinstance(raw_path, str):
+        raise HTTPException(status_code=404, detail="live stream is not available")
+    frame_path = Path(raw_path).resolve()
+    try:
+        frame_path.relative_to((JOB_ROOT / job_id).resolve())
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="invalid live stream path") from exc
+
+    def frames():
+        last_modified = 0
+        boundary = b"--frame\r\n"
+        while True:
+            with JOB_LOCK:
+                current = JOBS.get(job_id)
+                status = current.get("status") if current else "failed"
+            modified = 0
+            try:
+                modified = frame_path.stat().st_mtime_ns
+            except FileNotFoundError:
+                pass
+            if modified and modified != last_modified:
+                try:
+                    payload = frame_path.read_bytes()
+                except FileNotFoundError:
+                    payload = b""
+                if payload:
+                    last_modified = modified
+                    yield (
+                        boundary
+                        + b"Content-Type: image/jpeg\r\n"
+                        + f"Content-Length: {len(payload)}\r\n\r\n".encode("ascii")
+                        + payload
+                        + b"\r\n"
+                    )
+            if status not in {"starting", "queued", "running", "stopping", "finalizing"} and modified == last_modified:
+                break
+            time.sleep(0.12)
+
+    return StreamingResponse(
+        frames(),
+        media_type="multipart/x-mixed-replace; boundary=frame",
+        headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.get("/api/jobs/{job_id}/video")
@@ -472,12 +620,20 @@ def get_job_video(job_id: str, request: Request) -> StreamingResponse:
 @app.post("/api/jobs/{job_id}/stop")
 def stop_job(job_id: str) -> dict[str, str]:
     with JOB_LOCK:
-        process = JOB_PROCESSES.get(job_id)
-        if process is None:
+        job = JOBS.get(job_id)
+        if job is None or job["status"] not in {"starting", "queued", "running", "stopping"}:
             raise HTTPException(status_code=404, detail="running job not found")
-        process.terminate()
-        JOBS[job_id]["status"] = "stopped"
-    return {"job_id": job_id, "status": "stopped"}
+        if job["status"] == "starting":
+            process = JOB_PROCESSES.get(job_id)
+            if process is not None:
+                process.terminate()
+            job["status"] = "stopped"
+            return {"job_id": job_id, "status": "stopped"}
+        stop_file = JOB_ROOT / job_id / "stop.request"
+        stop_file.parent.mkdir(parents=True, exist_ok=True)
+        stop_file.touch()
+        job["status"] = "stopping"
+    return {"job_id": job_id, "status": "stopping"}
 
 
 @app.delete("/api/evidence")

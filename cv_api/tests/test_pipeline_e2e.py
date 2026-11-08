@@ -85,6 +85,18 @@ def write_config(path: Path, video: Path, rule: dict) -> None:
     )
 
 
+def test_pipeline_requires_an_explicit_video_source(tmp_path: Path) -> None:
+    config = tmp_path / "pipeline.yaml"
+    config.write_text('camera:\n  id: cam1\n  source: ""\n', encoding="utf-8")
+
+    try:
+        run_pipeline(config)
+    except ValueError as exc:
+        assert "No video source configured" in str(exc)
+    else:
+        raise AssertionError("pipeline should reject a missing source")
+
+
 def test_pipeline_publishes_evidence_and_respects_cooldown_and_schedule(tmp_path: Path) -> None:
     video = tmp_path / "synthetic.mp4"
     write_video(video)
@@ -153,3 +165,46 @@ def test_pipeline_publishes_evidence_and_respects_cooldown_and_schedule(tmp_path
         publisher=no_event_publisher,
     )
     assert no_event_publisher.events == []
+
+
+def test_graceful_stop_flushes_confirmed_event_evidence(tmp_path: Path) -> None:
+    video = tmp_path / "synthetic-stop.mp4"
+    write_video(video)
+    config = tmp_path / "pipeline-stop.yaml"
+    write_config(config, video, {"type": "restricted_zone_entry"})
+    raw = yaml.safe_load(config.read_text(encoding="utf-8"))
+    raw["evidence"] = {
+        "enabled": True,
+        "evidence_dir": str(tmp_path / "evidence-stop"),
+        "pre_roll_seconds": 0,
+        "post_roll_seconds": 0,
+        "fps_cap": 10,
+    }
+    config.write_text(yaml.safe_dump(raw), encoding="utf-8")
+    stop_file = tmp_path / "stop.request"
+    started_file = tmp_path / "source.started"
+
+    class StopAfterIncidentDetector(FakeDetector):
+        def detect(self, frame: np.ndarray) -> list[Detection]:
+            detections = super().detect(frame)
+            if self.index == 5:
+                stop_file.touch()
+            return detections
+
+    publisher = FakePublisher()
+    run_pipeline(
+        config,
+        detector=StopAfterIncidentDetector(),
+        publisher=publisher,
+        stop_file=stop_file,
+        started_file=started_file,
+    )
+
+    assert started_file.is_file()
+    assert stop_file.is_file()
+    assert len(publisher.events) == 1
+    event = publisher.events[0]
+    assert event.evidence is not None
+    assert Path(event.evidence.snapshot_path).is_file()
+    assert event.evidence.clip_path is not None
+    assert Path(event.evidence.clip_path).is_file()

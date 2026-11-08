@@ -1,10 +1,15 @@
-2026-11-07 21:24:53,228 INFO src.analytics.publisher: MQTT publisher initialized host=localhost port=1883 topic=analytics/events qos=1
-2026-11-07 21:24:55,294 INFO __main__: Starting pipeline for camera_id=cam1 source=demo-media/shoplifting4.mp4 visualization=True
-2026-11-07 21:24:55,404 INFO src.analytics.ingest: Opened video source: demo-media/shoplifting4.mp4
-2026-11-07 21:25:03,907 INFO src.analytics.tracker: NEW track id=0 frame=2 class=person conf=0.84 bbox=(211, 165, 367, 495)
-2026-11-07 21:25:40,666 INFO src.analytics.tracker: NEW track id=1 frame=8 class=person conf=0.42 bbox=(0, 238, 100, 429)
-2026-11-07 21:26:57,633 INFO src.analytics.tracker: NEW track id=2 frame=12 class=person conf=0.50 bbox=(508, 50, 544, 104)
-2026-11-07 21:30:16,834 INFO __main__: Event generated: suspected_shoplifting track_id=0
-2026-11-07 21:30:16,835 INFO src.analytics.publisher: Connecting to MQTT broker localhost:1883
-2026-11-07 21:30:19,440 INFO src.analytics.publisher: MQTT connected successfully to localhost:1883
-2026-11-07 21:30:19,442 INFO src.analytics.publisher: MQTT event published topic=analytics/events qos=1 payload_size=922
+2026-11-08 13:57:31,793 INFO src.analytics.publisher: MQTT publisher initialized host=localhost port=1883 topic=analytics/events qos=1
+2026-11-08 13:57:33,847 INFO __main__: Starting pipeline for camera_id=cam1 source=demo-media/shoplifting4.mp4 visualization=True
+2026-11-08 13:57:34,172 INFO src.analytics.ingest: Opened video source: demo-media/shoplifting4.mp4
+2026-11-08 13:57:41,137 INFO src.analytics.tracker: NEW track id=0 frame=2 class=person conf=0.84 bbox=(211, 165, 367, 495)
+2026-11-08 13:58:02,403 INFO src.analytics.tracker: NEW track id=1 frame=8 class=person conf=0.42 bbox=(0, 238, 100, 429)
+2026-11-08 13:58:15,908 INFO src.analytics.tracker: NEW track id=2 frame=12 class=person conf=0.50 bbox=(508, 50, 544, 104)
+2026-11-08 13:58:53,067 INFO __main__: Event generated: suspected_shoplifting track_id=0
+2026-11-08 13:58:53,067 INFO src.analytics.publisher: Connecting to MQTT broker localhost:1883
+2026-11-08 13:58:55,120 INFO src.analytics.publisher: MQTT connected successfully to localhost:1883
+2026-11-08 13:58:55,128 INFO src.analytics.publisher: MQTT event published topic=analytics/events qos=1 payload_size=922
+2026-11-08 14:06:10,906 WARNING src.analytics.evidence: ffmpeg is unavailable; browser playback may not work for evidence\default\cam1\2026-11-08\c01c9ac0-4ce8-4fb0-b8ca-43ac93993a2e.mp4
+2026-11-08 14:06:10,948 INFO src.analytics.publisher: MQTT event published topic=analytics/events qos=1 payload_size=630
+2026-11-08 14:12:37,762 INFO src.analytics.ingest: Video file finished: demo-media/shoplifting4.mp4
+2026-11-08 14:12:37,766 INFO src.analytics.ingest: Closed video source: demo-media/shoplifting4.mp4
+2026-11-08 14:12:38,591 INFO __main__: Pipeline stopped after 241 frames

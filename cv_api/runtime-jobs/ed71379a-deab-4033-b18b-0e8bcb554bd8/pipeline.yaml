@@ -2,7 +2,9 @@ camera:
   id: dashboard-camera
   loop: false
   site_id: default
-  source: C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\runtime-jobs\95997503-fff8-463f-86f6-88539f5841e8\input.mp4
+  source: ''
+control:
+  stop_file: C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\runtime-jobs\ed71379a-deab-4033-b18b-0e8bcb554bd8\stop.request
 detector:
   classes_of_interest:
   - person
@@ -19,8 +21,10 @@ evidence:
   enabled: true
   evidence_dir: evidence
   fps_cap: 10
+  min_event_confidence: 0.7
   post_roll_seconds: 5
   pre_roll_seconds: 5
+  shoplifting_min_concealment_score: 0.0
 lines:
 - camera_id: cam1
   name: entrance_line
@@ -84,7 +88,7 @@ shoplifting:
     - - 400
       - 330
   classification_threshold: 0.5
-  classifier_checkpoint: models/shoplifting/shoplifting_model.pth
+  concealment_ratio: 0.45
   cooldown_seconds: 30.0
   device: cpu
   enabled: true
@@ -94,6 +98,7 @@ shoplifting:
       - 0
     - - 560
       - 480
+  merchandise_lookback_seconds: 30.0
   merchandise_zones:
   - name: shelf_area
     polygon:
@@ -105,13 +110,18 @@ shoplifting:
       - 330
     - - 0
       - 330
-  minimum_keypoint_confidence: 0.0
   minimum_merchandise_dwell_seconds: 2.0
   minimum_suspicious_observations: 3
   observation_window_seconds: 5.0
   pose_confidence: 0.25
-  pose_model_path: yolo11x-pose.pt
+  pose_image_size: 640
+  pose_model_path: models/shoplifting/best.pt
+  pose_stride: 1
   require_checkout_zone: false
+  require_merchandise_interaction: false
+  suppress_in_checkout: true
+  torso_confidence: 0.3
+  wrist_confidence: 0.5
 tracker:
   high_conf_det_threshold: 0.5
   lost_track_buffer: 90
@@ -123,8 +133,10 @@ tracker:
   type: bytetrack
 visualization:
   enabled: false
+  live_frame_fps: 8
+  live_frame_path: C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\runtime-jobs\ed71379a-deab-4033-b18b-0e8bcb554bd8\live.jpg
   output_fps: 10
-  output_path: C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\runtime-jobs\239080f3-5e20-4b8d-b1b7-82704f097e00\annotated.mp4
+  output_path: C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\runtime-jobs\ed71379a-deab-4033-b18b-0e8bcb554bd8\annotated.mp4
 zones:
 - camera_id: cam1
   name: restricted_area

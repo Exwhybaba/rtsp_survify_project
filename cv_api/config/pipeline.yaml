@@ -1,7 +1,7 @@
 camera:
   id: "cam1"
   site_id: "default"
-  source: "demo-media/shoplifting4.mp4"
+  source: ""
   loop: false
 
 shoplifting:
@@ -80,6 +80,13 @@ evidence:
   pre_roll_seconds: 5
   post_roll_seconds: 5
   fps_cap: 10
+  # Only attach screenshot/clip evidence when the event confidence is at least 70%.
+  # Events below this score are still detected and reported without saved evidence.
+  min_event_confidence: 0.70
+  # Separate evidence quality gate; 0 captures every confirmed event.
+  # The pose heuristic score is not calibrated as a probability, so do not
+  # raise this without validating against labeled camera footage.
+  shoplifting_min_concealment_score: 0.0
 
 zones:
   - name: "restricted_area"

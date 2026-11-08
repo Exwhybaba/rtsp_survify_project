@@ -1,6 +1,8 @@
 param(
     [switch]$NoBrowser,
-    [switch]$NoPipeline
+    [switch]$StartPipeline,
+    [switch]$NoPipeline,
+    [string]$PipelineSource = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -88,6 +90,12 @@ try {
     if (-not (Test-Path $Mosquitto)) {
         throw "Mosquitto not found: $Mosquitto"
     }
+    if ($StartPipeline -and [string]::IsNullOrWhiteSpace($PipelineSource)) {
+        throw "-PipelineSource is required with -StartPipeline. Start a source from the dashboard for normal use."
+    }
+    if ($StartPipeline -and $NoPipeline) {
+        throw "Use either -StartPipeline or -NoPipeline, not both."
+    }
 
     if (Test-PortListening 1883) {
         Write-Host "Mosquitto is already running on port 1883." -ForegroundColor Green
@@ -131,22 +139,25 @@ try {
         Start-Process "http://127.0.0.1:5173"
     }
 
-    if (-not $NoPipeline) {
+    if ($StartPipeline) {
         $pipelineExists = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
             Where-Object {
                 $_.CommandLine -and
                 $_.CommandLine -like "*src.analytics.pipeline*" -and
-                $_.CommandLine -like "*config\pipeline.yaml*"
+                $_.CommandLine -like "*$PipelineSource*"
             }
         if ($pipelineExists) {
-            Write-Host "The configured CV pipeline is already running." -ForegroundColor Green
+            Write-Host "The requested CV pipeline source is already running." -ForegroundColor Green
         } else {
             $pipelineArgs = @(
                 "-m", "src.analytics.pipeline",
-                "--config", ".\config\pipeline.yaml"
+                "--config", ".\config\pipeline.yaml",
+                "--source", $PipelineSource
             )
             Start-ManagedProcess "CV Pipeline" $Python $pipelineArgs $CvApi
         }
+    } else {
+        Write-Host "No video source was started. Connect a camera or upload a file in the dashboard." -ForegroundColor Green
     }
 
     Write-Host ""

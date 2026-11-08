@@ -436,13 +436,12 @@ evidence.on_events(events, frame, event_time)
 
 If there are events:
 
-1. The current frame is copied.
-2. Each event bounding box is drawn in red.
-3. A JPEG snapshot is written immediately.
-4. The event is updated with an `EvidenceRef` containing the snapshot path and
+1. The original current frame is written as the evidence JPEG; event metadata
+   stays alongside the image in the dashboard.
+2. The event is updated with an `EvidenceRef` containing the snapshot path and
    hash.
-5. A clip job is created for pre-roll through post-roll.
-6. The event can be published immediately with the snapshot reference.
+3. A clip job is created for pre-roll through post-roll.
+4. The event can be published immediately with the snapshot reference.
 
 The pipeline catches evidence errors and logs them rather than stopping
 analytics.
@@ -571,6 +570,14 @@ The main sections of `config/pipeline.yaml` are:
 | `zones` | Polygon geometry and zone rules |
 | `lines` | Tripwire geometry and line rules |
 | `visualization` | OpenCV display settings |
+
+`evidence.min_event_confidence` is an evidence-only cutoff applied to all event
+types. The dashboard pipeline sets it to `0.7`, so events below 70% confidence
+are still reported but do not receive a snapshot or clip. Set it to `0.0` to
+capture evidence for every event. `evidence.shoplifting_min_concealment_score`
+is a separate optional evidence-only cutoff for confirmed shoplifting events;
+the concealment score is a geometric heuristic, not a calibrated probability.
+Neither evidence cutoff suppresses the event or MQTT alert.
 
 Minimal camera configuration:
 

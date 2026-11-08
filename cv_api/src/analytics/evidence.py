@@ -199,6 +199,8 @@ class EvidenceCapture:
         pre_roll_seconds: float = 5.0,
         post_roll_seconds: float = 5.0,
         fps_cap: float = 10.0,
+        min_event_confidence: float = 0.0,
+        shoplifting_min_concealment_score: float = 0.0,
         enabled: bool = False,
         on_evidence_ready: Callable[[EvidenceReadyMessage], None] | None = None,
     ) -> None:
@@ -210,6 +212,12 @@ class EvidenceCapture:
         self.pre_roll_seconds = max(0.0, pre_roll_seconds)
         self.post_roll_seconds = max(0.0, post_roll_seconds)
         self.fps_cap = max(1.0, fps_cap)
+        if not 0.0 <= min_event_confidence <= 1.0:
+            raise ValueError("min_event_confidence must be between 0 and 1")
+        self.min_event_confidence = min_event_confidence
+        if not 0.0 <= shoplifting_min_concealment_score <= 1.0:
+            raise ValueError("shoplifting_min_concealment_score must be between 0 and 1")
+        self.shoplifting_min_concealment_score = shoplifting_min_concealment_score
         self._on_evidence_ready = on_evidence_ready
         self._frames: deque[_Frame] = deque()
         self._events: dict[UUID, VisionEvent] = {}
@@ -257,15 +265,30 @@ class EvidenceCapture:
         """Save event snapshots and schedule a merged clip."""
         if not self.enabled or not events:
             return
+        evidence_events = []
+        for event in events:
+            if event.confidence < self.min_event_confidence:
+                event.metadata["evidence_capture_skipped"] = "below_evidence_threshold"
+                continue
+            concealment_score = event.metadata.get("concealment_score")
+            if (
+                event.event_type.value == "suspected_shoplifting"
+                and isinstance(concealment_score, (int, float))
+                and concealment_score < self.shoplifting_min_concealment_score
+            ):
+                event.metadata["evidence_capture_skipped"] = "below_evidence_threshold"
+                continue
+            evidence_events.append(event)
+        if not evidence_events:
+            return
         timestamp = datetime.fromtimestamp(event_time, timezone.utc)
         day = timestamp.strftime("%Y-%m-%d")
         output_dir = self.evidence_dir / self.site_id / self.camera_id / day
         output_dir.mkdir(parents=True, exist_ok=True)
         with self._condition:
-            for event in events:
-                annotated = annotate_event_frame(frame, event)
+            for event in evidence_events:
                 snapshot_path = output_dir / f"{event.event_id}.jpg"
-                if not cv2.imwrite(str(snapshot_path), annotated):
+                if not cv2.imwrite(str(snapshot_path), frame):
                     raise ValueError(f"could not write evidence snapshot {snapshot_path}")
                 event.evidence = EvidenceRef(
                     snapshot_path=str(snapshot_path),
@@ -284,14 +307,14 @@ class EvidenceCapture:
                 self._job = _ClipJob(
                     start=start,
                     end=end,
-                    event_ids=[event.event_id for event in events],
-                    events={event.event_id: event for event in events},
+                    event_ids=[event.event_id for event in evidence_events],
+                    events={event.event_id: event for event in evidence_events},
                     frame_size=self._frame_size or (frame.shape[1], frame.shape[0]),
                 )
             else:
                 self._job.start = min(self._job.start, start)
                 self._job.end = max(self._job.end, end)
-                for event in events:
+                for event in evidence_events:
                     if event.event_id not in self._job.event_ids:
                         self._job.event_ids.append(event.event_id)
                     self._job.events[event.event_id] = event

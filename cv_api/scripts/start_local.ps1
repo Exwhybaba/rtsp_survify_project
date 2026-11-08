@@ -7,6 +7,8 @@ param(
     [string]$PythonPath = "",
     [string]$MosquittoPath = "",
     [string]$ConfigPath = "",
+    [switch]$StartPipeline,
+    [string]$PipelineSource = "",
     [switch]$NoBrowser
 )
 
@@ -39,6 +41,9 @@ if (-not (Test-Path -LiteralPath $ResolvedConfig -PathType Leaf)) {
 
 if (-not (Test-Path -LiteralPath $ViewerFile -PathType Leaf)) {
     throw "Viewer file not found: $ViewerFile"
+}
+if ($StartPipeline -and [string]::IsNullOrWhiteSpace($PipelineSource)) {
+    throw "-PipelineSource is required with -StartPipeline. Start a source from the dashboard for normal use."
 }
 
 New-Item -ItemType Directory -Force -Path $LogDir, $EvidenceDir | Out-Null
@@ -325,35 +330,41 @@ try {
     # 4. ANALYTICS PIPELINE
     # ----------------------------------------------
 
-    Write-Host "`n[4/4] Starting analytics pipeline..." -ForegroundColor Yellow
+    if ($StartPipeline) {
+        Write-Host "`n[4/4] Starting explicitly requested analytics source..." -ForegroundColor Yellow
 
-    $OldMqttPort = $env:MQTT_PORT
-    $env:MQTT_PORT = "$MqttPort"
+        $OldMqttPort = $env:MQTT_PORT
+        $env:MQTT_PORT = "$MqttPort"
 
-    try {
-        $PipelineProcess = Start-LoggedProcess `
-            -FilePath $Python `
-            -ArgumentList @(
-                "-m",
-                "src.analytics.pipeline",
-                "--config",
-                "`"$ResolvedConfig`""
-            ) `
-            -WorkingDirectory $ProjectRoot `
-            -OutputPath (Join-Path $LogDir "pipeline.stdout.log") `
-            -ErrorPath (Join-Path $LogDir "pipeline.stderr.log")
-    } finally {
-        $env:MQTT_PORT = $OldMqttPort
-    }
+        try {
+            $PipelineProcess = Start-LoggedProcess `
+                -FilePath $Python `
+                -ArgumentList @(
+                    "-m",
+                    "src.analytics.pipeline",
+                    "--config",
+                    "`"$ResolvedConfig`"",
+                    "--source",
+                    "`"$PipelineSource`""
+                ) `
+                -WorkingDirectory $ProjectRoot `
+                -OutputPath (Join-Path $LogDir "pipeline.stdout.log") `
+                -ErrorPath (Join-Path $LogDir "pipeline.stderr.log")
+        } finally {
+            $env:MQTT_PORT = $OldMqttPort
+        }
 
-    $StartedProcesses.Add($PipelineProcess)
+        $StartedProcesses.Add($PipelineProcess)
 
-    Start-Sleep -Seconds 2
+        Start-Sleep -Seconds 2
 
-    if ($PipelineProcess.HasExited) {
-        Write-Warning "Pipeline exited shortly after launch. Check logs\pipeline.stderr.log."
+        if ($PipelineProcess.HasExited) {
+            Write-Warning "Pipeline exited shortly after launch. Check logs\pipeline.stderr.log."
+        } else {
+            Write-Host "Analytics pipeline started." -ForegroundColor Green
+        }
     } else {
-        Write-Host "Analytics pipeline started." -ForegroundColor Green
+        Write-Host "`n[4/4] No video source started. Connect or upload one through the dashboard." -ForegroundColor Green
     }
 
     # ----------------------------------------------

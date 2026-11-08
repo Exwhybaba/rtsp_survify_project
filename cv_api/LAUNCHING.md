@@ -11,7 +11,6 @@ Open PowerShell:
 ```powershell
 cd C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api
 
-python scripts\generate_demo_video.py --output demo-media\demo.mp4
 docker compose up --build
 ```
 
@@ -59,8 +58,8 @@ The tracking visualizer needs GUI-enabled `opencv-python`, not
 
 ### Run a recorded video file
 
-To start the local broker, evidence server, viewer, and analytics pipeline
-together, run this from `cv_api`:
+To start the local broker, evidence server, and legacy event viewer, run this
+from `cv_api`. It does not start a video source:
 
 ```powershell
 .\scripts\start_local.ps1
@@ -70,7 +69,10 @@ The script uses `.venv\Scripts\python.exe` when available, finds
 `mosquitto.exe` on `PATH`, opens the viewer, and writes logs to `logs\`.
 Use `-NoBrowser` to skip opening a browser, or pass `-MosquittoPath` if
 Mosquitto is not on `PATH`. The default ports are MQTT `1883`, MQTT
-WebSockets `9001`, evidence `8001`, and viewer `8080`.
+WebSockets `9001`, evidence `8001`, and viewer `8080`. To explicitly start
+the standalone pipeline too, pass `-StartPipeline -PipelineSource` with a
+file path or RTSP URL. The React dashboard launcher is at the repository
+root; its UI starts source jobs directly.
 
 The pipeline accepts local video files such as `.mp4`, `.avi`, and `.mov`.
 For the included synthetic video, generate it with:
@@ -79,13 +81,13 @@ For the included synthetic video, generate it with:
 python scripts\generate_demo_video.py --output demo-media\demo.mp4
 ```
 
-For your own video, copy it into `demo-media` and set `camera.source` in
-`config\pipeline.yaml` to its path:
+For command-line runs, pass the source explicitly rather than relying on a
+default source in `config\pipeline.yaml`:
 
 ```yaml
 camera:
   id: "recorded-video"
-  source: "demo-media/my-video.mp4"
+  source: ""
   loop: false
 ```
 
@@ -104,14 +106,14 @@ Start the analytics pipeline in a second PowerShell window:
 cd C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api
 .\.venv\Scripts\Activate.ps1
 
-python -m src.analytics.pipeline --config config\pipeline.yaml --max-frames 200
+python -m src.analytics.pipeline --config config\pipeline.yaml --source demo-media\my-video.mp4 --max-frames 200
 ```
 
 Remove `--max-frames 200` to process the entire file, or to continue running
 forever when `loop: true`:
 
 ```powershell
-python -m src.analytics.pipeline --config config\pipeline.yaml
+python -m src.analytics.pipeline --config config\pipeline.yaml --source demo-media\my-video.mp4
 ```
 
 The first pipeline run may download the `yolov8n.pt` model automatically.

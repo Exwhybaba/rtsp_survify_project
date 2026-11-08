@@ -1,0 +1,14 @@
+{
+  "event_ids": [
+    "0281ba97-16dc-47b4-90b1-bdaaa8612f8a"
+  ],
+  "site_id": "default",
+  "camera_id": "dashboard-camera",
+  "source": "C:\\Users\\HomePC\\Documents\\suvirfy\\rtsp-yolo\\cv_api\\runtime-jobs\\9c17cb7c-42fa-4bbc-923b-bc35a9e1b4b8\\input.mp4",
+  "clip_start": "2026-11-08T15:27:53.822575+00:00",
+  "clip_end": "2026-11-08T15:28:03.822575+00:00",
+  "snapshot_hashes": {
+    "0281ba97-16dc-47b4-90b1-bdaaa8612f8a": "5f6e566614de9d5c73b5cdccdc98aabf059478345b2cfc78f35f7aa0f50f4643"
+  },
+  "clip_sha256": "2796c9a455edca52d88405ffcc74db417931c8f647198aa466e808a3c8a4a260"
+}

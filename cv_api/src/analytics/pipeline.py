@@ -149,12 +149,17 @@ def run_pipeline(
     source: VideoSource | None = None,
     publisher: EventPublisher | None = None,
     evidence: EvidenceCapture | None = None,
+    stop_file: str | Path | None = None,
+    started_file: str | Path | None = None,
 ) -> None:
     """Run detection, tracking, rules, publishing and visualisation."""
     config = load_config(config_path)
 
     camera_id = config["camera"]["id"]
-    source_uri = source_override or config["camera"]["source"]
+    source_uri = source_override or config["camera"].get("source")
+    if not isinstance(source_uri, str) or not source_uri.strip():
+        raise ValueError("No video source configured. Pass --source or set camera.source.")
+    source_uri = source_uri.strip()
     loop_video = bool(config["camera"].get("loop", False))
 
     detector = detector or build_detector(config)
@@ -286,6 +291,12 @@ def run_pipeline(
             pre_roll_seconds=float(evidence_cfg.get("pre_roll_seconds", 5.0)),
             post_roll_seconds=float(evidence_cfg.get("post_roll_seconds", 5.0)),
             fps_cap=float(evidence_cfg.get("fps_cap", 10.0)),
+            min_event_confidence=float(
+                evidence_cfg.get("min_event_confidence", 0.0)
+            ),
+            shoplifting_min_concealment_score=float(
+                evidence_cfg.get("shoplifting_min_concealment_score", 0.0)
+            ),
             enabled=bool(evidence_cfg.get("enabled", False)),
             on_evidence_ready=publisher.publish_evidence_ready,
         )
@@ -293,7 +304,15 @@ def run_pipeline(
     try:
         active_source = source or VideoSource(source_uri, loop=loop_video)
         with active_source:
+            source_started = False
             for bundle in active_source.frames():
+                if stop_file is not None and Path(stop_file).is_file():
+                    logger.info("Analysis stop requested for camera_id=%s", camera_id)
+                    break
+                if not source_started and started_file is not None:
+                    Path(started_file).parent.mkdir(parents=True, exist_ok=True)
+                    Path(started_file).touch()
+                    source_started = True
 
                 # 1. Detect objects in the original frame.
                 detections = detector.detect(bundle.frame)
@@ -440,6 +459,16 @@ def main() -> None:
         default=None,
         help="Optional source override, independent of the YAML camera source.",
     )
+    parser.add_argument(
+        "--stop-file",
+        default=None,
+        help="Optional marker file used to request a graceful stop.",
+    )
+    parser.add_argument(
+        "--started-file",
+        default=None,
+        help="Optional marker file created once the video source opens.",
+    )
 
     args = parser.parse_args()
 
@@ -447,6 +476,8 @@ def main() -> None:
         args.config,
         max_frames=args.max_frames,
         source_override=args.source,
+        stop_file=args.stop_file,
+        started_file=args.started_file,
     )
 
 

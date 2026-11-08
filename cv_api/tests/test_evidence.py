@@ -111,6 +111,80 @@ def test_evidence_annotation_handles_missing_optional_fields_and_clips_bounds() 
     ]
 
 
+def test_snapshot_preserves_unmodified_incident_frame(tmp_path) -> None:
+    event = make_event()
+    frame = np.full((48, 64, 3), 127, dtype=np.uint8)
+    capture = EvidenceCapture(
+        evidence_dir=tmp_path,
+        site_id="site1",
+        camera_id="cam1",
+        source_uri="camera",
+        post_roll_seconds=0,
+        enabled=True,
+    )
+
+    capture.on_events([event], frame, 1.0)
+    capture.flush()
+    capture.close()
+
+    snapshot = cv2.imread(event.evidence.snapshot_path)
+    assert snapshot is not None
+    assert np.allclose(snapshot, frame, atol=5)
+
+
+def test_shoplifting_evidence_threshold_is_separate_from_event_emission(tmp_path) -> None:
+    event = make_event().model_copy(
+        update={
+            "event_type": EventType.SUSPECTED_SHOPLIFTING,
+            "confidence": 0.65,
+            "metadata": {"concealment_score": 0.65},
+        }
+    )
+    frame = np.zeros((48, 64, 3), dtype=np.uint8)
+    capture = EvidenceCapture(
+        evidence_dir=tmp_path,
+        site_id="site1",
+        camera_id="cam1",
+        source_uri="camera",
+        shoplifting_min_concealment_score=0.7,
+        enabled=True,
+    )
+
+    capture.on_events([event], frame, 1.0)
+    capture.flush()
+    capture.close()
+
+    assert event.evidence is None
+    assert event.metadata["evidence_capture_skipped"] == "below_evidence_threshold"
+
+
+def test_concealment_score_gate_does_not_filter_contextual_fallback_events(tmp_path) -> None:
+    event = make_event().model_copy(
+        update={
+            "event_type": EventType.SUSPECTED_SHOPLIFTING,
+            "confidence": 0.4,
+            "metadata": {"behavior": "merchandise_interaction_then_exit"},
+        }
+    )
+    capture = EvidenceCapture(
+        evidence_dir=tmp_path,
+        site_id="site1",
+        camera_id="cam1",
+        source_uri="camera",
+        shoplifting_min_concealment_score=0.7,
+        enabled=True,
+    )
+
+    frame = np.zeros((48, 64, 3), dtype=np.uint8)
+    capture.add_frame(frame, 1.0)
+    capture.on_events([event], frame, 1.0)
+    capture.flush()
+    capture.close()
+
+    assert event.evidence is not None
+    assert "evidence_capture_skipped" not in event.metadata
+
+
 def test_multiple_event_snapshots_keep_event_specific_annotations(tmp_path) -> None:
     first = make_event()
     first.metadata.update({"class_name": "person", "zone": "zone-a", "severity": "low"})
@@ -133,6 +207,6 @@ def test_multiple_event_snapshots_keep_event_specific_annotations(tmp_path) -> N
     second_image = cv2.imread(second.evidence.snapshot_path)
     assert first_image is not None
     assert second_image is not None
-    assert not np.array_equal(first_image, second_image)
+    assert np.array_equal(first_image, second_image)
     assert "ZONE: zone-a" in event_annotation_lines(first)
     assert "ZONE: zone-b" in event_annotation_lines(second)
