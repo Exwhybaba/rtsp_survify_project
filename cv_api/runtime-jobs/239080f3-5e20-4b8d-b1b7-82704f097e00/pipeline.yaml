@@ -1,0 +1,272 @@
+camera:
+  id: dashboard-camera
+  loop: false
+  site_id: default
+  source: C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\runtime-jobs\95997503-fff8-463f-86f6-88539f5841e8\input.mp4
+detector:
+  classes_of_interest:
+  - person
+  - car
+  - truck
+  - bus
+  - motorcycle
+  - bicycle
+  confidence_threshold: 0.25
+  device: cpu
+  image_size: 960
+  model_path: yolov8s.pt
+evidence:
+  enabled: true
+  evidence_dir: evidence
+  fps_cap: 10
+  post_roll_seconds: 5
+  pre_roll_seconds: 5
+lines:
+- camera_id: cam1
+  name: entrance_line
+  points:
+  - - 100
+    - 1600
+  - - 1200
+    - 1600
+  rules:
+  - allowed_direction: negative_to_positive
+    cooldown_seconds: 0
+    entry_direction: negative_to_positive
+    object_classes:
+    - person
+    track_occupancy: true
+    type: line_crossing
+  - allowed_direction: positive_to_negative
+    cooldown_seconds: 0
+    entry_direction: negative_to_positive
+    object_classes:
+    - person
+    track_occupancy: true
+    type: line_crossing
+  - allowed_direction: negative_to_positive
+    cooldown_seconds: 0
+    object_classes:
+    - car
+    - truck
+    - bus
+    - motorcycle
+    - bicycle
+    track_occupancy: false
+    type: line_crossing
+  - allowed_direction: positive_to_negative
+    cooldown_seconds: 0
+    object_classes:
+    - car
+    - truck
+    - bus
+    - motorcycle
+    - bicycle
+    track_occupancy: false
+    type: line_crossing
+publisher:
+  mqtt_host: localhost
+  mqtt_port: 1883
+  mqtt_qos: 1
+  mqtt_topic: analytics/events
+  webhook_url: ''
+shoplifting:
+  allowed_direction: either
+  checkout_zones:
+  - name: checkout_area
+    polygon:
+    - - 400
+      - 40
+    - - 640
+      - 40
+    - - 640
+      - 330
+    - - 400
+      - 330
+  classification_threshold: 0.5
+  classifier_checkpoint: models/shoplifting/shoplifting_model.pth
+  cooldown_seconds: 30.0
+  device: cpu
+  enabled: true
+  exit_line:
+    points:
+    - - 560
+      - 0
+    - - 560
+      - 480
+  merchandise_zones:
+  - name: shelf_area
+    polygon:
+    - - 0
+      - 40
+    - - 430
+      - 40
+    - - 430
+      - 330
+    - - 0
+      - 330
+  minimum_keypoint_confidence: 0.0
+  minimum_merchandise_dwell_seconds: 2.0
+  minimum_suspicious_observations: 3
+  observation_window_seconds: 5.0
+  pose_confidence: 0.25
+  pose_model_path: yolo11x-pose.pt
+  require_checkout_zone: false
+tracker:
+  high_conf_det_threshold: 0.5
+  lost_track_buffer: 90
+  minimum_consecutive_frames: 2
+  minimum_iou_threshold: 0.05
+  relink_distance_factor: 1.5
+  relink_max_gap_frames: 15
+  track_activation_threshold: 0.5
+  type: bytetrack
+visualization:
+  enabled: false
+  output_fps: 10
+  output_path: C:\Users\HomePC\Documents\suvirfy\rtsp-yolo\cv_api\runtime-jobs\239080f3-5e20-4b8d-b1b7-82704f097e00\annotated.mp4
+zones:
+- camera_id: cam1
+  name: restricted_area
+  polygon:
+  - - 1500
+    - 700
+  - - 2200
+    - 700
+  - - 2200
+    - 1250
+  - - 1500
+    - 1250
+  rules:
+  - armed_when: always
+    cooldown_seconds: 0
+    object_classes:
+    - person
+    type: restricted_zone_entry
+  - cooldown_seconds: 0
+    max_dwell_seconds: 60.0
+    object_classes:
+    - person
+    type: dwell_time_exceeded
+  - armed_when: always
+    cooldown_seconds: 0
+    object_classes:
+    - car
+    - truck
+    - bus
+    - motorcycle
+    - bicycle
+    type: restricted_zone_entry
+- camera_id: cam1
+  name: perimeter_zone
+  polygon:
+  - - 2600
+    - 700
+  - - 3400
+    - 700
+  - - 3400
+    - 1450
+  - - 2600
+    - 1450
+  rules:
+  - armed_when: always
+    cooldown_seconds: 10
+    object_classes:
+    - person
+    - car
+    - truck
+    - bus
+    - motorcycle
+    - bicycle
+    severity: high
+    type: perimeter_intrusion
+  - armed_when: closed_hours
+    cooldown_seconds: 60
+    object_classes:
+    - person
+    - car
+    - truck
+    - bus
+    - motorcycle
+    - bicycle
+    severity: high
+    type: after_hours_presence
+  schedule:
+    open_hours:
+      mon-sat:
+      - 08:00-20:00
+      sun: []
+    timezone: Africa/Lagos
+- camera_id: cam1
+  name: entrance_zone
+  polygon:
+  - - 300
+    - 700
+  - - 1000
+    - 700
+  - - 1000
+    - 1400
+  - - 300
+    - 1400
+  rules:
+  - armed_when: always
+    cooldown_seconds: 30
+    max_loiter_seconds: 60.0
+    object_classes:
+    - person
+    type: loitering_detected
+- camera_id: cam1
+  name: loading_area
+  polygon:
+  - - 1100
+    - 700
+  - - 1400
+    - 700
+  - - 1400
+    - 1250
+  - - 1100
+    - 1250
+  rules:
+  - armed_when: always
+    cooldown_seconds: 10
+    object_classes:
+    - person
+    - car
+    - truck
+    - bus
+    type: restricted_zone_entry
+  - cooldown_seconds: 60
+    max_dwell_seconds: 300.0
+    object_classes:
+    - car
+    - truck
+    - bus
+    type: dwell_time_exceeded
+- camera_id: cam1
+  name: parking_area
+  polygon:
+  - - 1500
+    - 1400
+  - - 2300
+    - 1400
+  - - 2300
+    - 1950
+  - - 1500
+    - 1950
+  rules:
+  - armed_when: closed_hours
+    cooldown_seconds: 60
+    object_classes:
+    - car
+    - truck
+    - bus
+    - motorcycle
+    severity: medium
+    type: after_hours_presence
+  schedule:
+    open_hours:
+      mon-sat:
+      - 06:00-22:00
+      sun:
+      - 08:00-20:00
+    timezone: Africa/Lagos

@@ -1,0 +1,218 @@
+camera:
+  id: "cam1"
+  site_id: "default"
+  source: "demo-media/shoplifting4.mp4"
+  loop: false
+
+shoplifting:
+  enabled: true
+  pose_model_path: "models/shoplifting/best.pt"   # your new model (copy it here)
+  device: "cpu"
+  pose_confidence: 0.25
+  pose_image_size: 640
+  pose_stride: 1                  # raise to 2-3 on CPU to cut cost
+  wrist_confidence: 0.5           # same as your notebook
+  torso_confidence: 0.3
+  concealment_ratio: 0.45         # same as your notebook (0.45 x body scale)
+  classification_threshold: 0.5   # a hit at exactly the ratio scores 0.5
+  observation_window_seconds: 5.0
+  minimum_suspicious_observations: 3
+  cooldown_seconds: 30.0
+  require_merchandise_interaction: false   # set true once zones are calibrated
+  merchandise_lookback_seconds: 30.0
+  suppress_in_checkout: true
+  # These coordinates are calibrated for Shoplifting (30).mp4 (640x480).
+  merchandise_zones:
+    - name: "shelf_area"
+      polygon:
+        - [0, 40]
+        - [430, 40]
+        - [430, 330]
+        - [0, 330]
+  checkout_zones:
+    - name: "checkout_area"
+      polygon:
+        - [400, 40]
+        - [640, 40]
+        - [640, 330]
+        - [400, 330]
+  exit_line:
+    points:
+      - [560, 0]
+      - [560, 480]
+  allowed_direction: "either"
+  minimum_merchandise_dwell_seconds: 2.0
+  require_checkout_zone: false
+
+detector:
+  model_path: "yolov8s.pt"
+  image_size: 960
+  confidence_threshold: 0.25
+  classes_of_interest:
+    - "person"
+    - "car"
+    - "truck"
+    - "bus"
+    - "motorcycle"
+    - "bicycle"
+  device: "cpu"
+
+tracker:
+  type: "bytetrack"
+  track_activation_threshold: 0.5
+  lost_track_buffer: 90
+  minimum_consecutive_frames: 2
+  high_conf_det_threshold: 0.5
+  minimum_iou_threshold: 0.05
+  relink_max_gap_frames: 15
+  relink_distance_factor: 1.5
+
+publisher:
+  mqtt_host: "localhost"
+  mqtt_port: 1883
+  mqtt_topic: "analytics/events"
+  mqtt_qos: 1
+  webhook_url: ""
+
+evidence:
+  enabled: true
+  evidence_dir: "evidence"
+  pre_roll_seconds: 5
+  post_roll_seconds: 5
+  fps_cap: 10
+
+zones:
+  - name: "restricted_area"
+    camera_id: "cam1"
+    polygon:
+      - [1500, 700]
+      - [2200, 700]
+      - [2200, 1250]
+      - [1500, 1250]
+    rules:
+      - type: "restricted_zone_entry"
+        object_classes: ["person"]
+        cooldown_seconds: 0
+        armed_when: "always"
+      - type: "dwell_time_exceeded"
+        object_classes: ["person"]
+        max_dwell_seconds: 60.0
+        cooldown_seconds: 0
+      - type: "restricted_zone_entry"
+        object_classes: ["car", "truck", "bus", "motorcycle", "bicycle"]
+        cooldown_seconds: 0
+        armed_when: "always"
+
+  - name: "perimeter_zone"
+    camera_id: "cam1"
+    polygon:
+      - [2600, 700]
+      - [3400, 700]
+      - [3400, 1450]
+      - [2600, 1450]
+    schedule:
+      timezone: "Africa/Lagos"
+      open_hours:
+        mon-sat: ["08:00-20:00"]
+        sun: []
+    rules:
+      - type: "perimeter_intrusion"
+        object_classes: ["person", "car", "truck", "bus", "motorcycle", "bicycle"]
+        severity: "high"
+        cooldown_seconds: 10
+        armed_when: "always"
+      - type: "after_hours_presence"
+        object_classes: ["person", "car", "truck", "bus", "motorcycle", "bicycle"]
+        severity: "high"
+        cooldown_seconds: 60
+        armed_when: "closed_hours"
+
+  - name: "entrance_zone"
+    camera_id: "cam1"
+    polygon:
+      - [300, 700]
+      - [1000, 700]
+      - [1000, 1400]
+      - [300, 1400]
+    rules:
+      - type: "loitering_detected"
+        object_classes: ["person"]
+        max_loiter_seconds: 60.0
+        cooldown_seconds: 30
+        armed_when: "always"
+
+  - name: "loading_area"
+    camera_id: "cam1"
+    polygon:
+      - [1100, 700]
+      - [1400, 700]
+      - [1400, 1250]
+      - [1100, 1250]
+    rules:
+      - type: "restricted_zone_entry"
+        object_classes: ["person", "car", "truck", "bus"]
+        cooldown_seconds: 10
+        armed_when: "always"
+      - type: "dwell_time_exceeded"
+        object_classes: ["car", "truck", "bus"]
+        max_dwell_seconds: 300.0
+        cooldown_seconds: 60
+
+  - name: "parking_area"
+    camera_id: "cam1"
+    polygon:
+      - [1500, 1400]
+      - [2300, 1400]
+      - [2300, 1950]
+      - [1500, 1950]
+    schedule:
+      timezone: "Africa/Lagos"
+      open_hours:
+        mon-sat: ["06:00-22:00"]
+        sun: ["08:00-20:00"]
+    rules:
+      - type: "after_hours_presence"
+        object_classes: ["car", "truck", "bus", "motorcycle"]
+        severity: "medium"
+        cooldown_seconds: 60
+        armed_when: "closed_hours"
+
+lines:
+  - name: "entrance_line"
+    camera_id: "cam1"
+    points:
+      - [100, 1600]
+      - [1200, 1600]
+    rules:
+      - type: "line_crossing"
+        object_classes: ["person"]
+        allowed_direction: "negative_to_positive"
+        track_occupancy: true
+        entry_direction: "negative_to_positive"
+        cooldown_seconds: 0
+      - type: "line_crossing"
+        object_classes: ["person"]
+        allowed_direction: "positive_to_negative"
+        track_occupancy: true
+        entry_direction: "negative_to_positive"
+        cooldown_seconds: 0
+      - type: "line_crossing"
+        object_classes: ["car", "truck", "bus", "motorcycle", "bicycle"]
+        allowed_direction: "negative_to_positive"
+        track_occupancy: false
+        cooldown_seconds: 0
+      - type: "line_crossing"
+        object_classes: ["car", "truck", "bus", "motorcycle", "bicycle"]
+        allowed_direction: "positive_to_negative"
+        track_occupancy: false
+        cooldown_seconds: 0
+
+visualization:
+  enabled: true
+  show_detections: true
+  show_track_ids: true
+  show_zones: true
+  show_lines: true
+  show_occupancy: true
+  show_events: true
+  window_name: "Suvirfy Live Monitoring"

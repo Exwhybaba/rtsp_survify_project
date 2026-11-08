@@ -1,0 +1,9 @@
+{
+    "python.defaultInterpreterPath": "${workspaceFolder}\\cv_api\\.venv\\Scripts\\python.exe",
+    "python.analysis.extraPaths": [
+        "${workspaceFolder}\\cv_api"
+    ],
+    "pylint.args": [
+        "--rcfile=${workspaceFolder}\\cv_api\\pyproject.toml"
+    ]
+}

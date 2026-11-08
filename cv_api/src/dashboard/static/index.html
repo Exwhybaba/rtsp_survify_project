@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Video Analytics - Live Events</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --bg: #0f1116;
+    --panel: #161923;
+    --border: #262b38;
+    --text: #e6e8ee;
+    --muted: #8b93a7;
+    --accent: #4da3ff;
+    --danger: #ff5d6c;
+    --warn: #ffb454;
+    --ok: #3ddc97;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  header .status { font-size: 13px; color: var(--muted); }
+  header .status.connected { color: var(--ok); }
+  header .status.disconnected { color: var(--danger); }
+
+  main { padding: 24px; max-width: 1100px; margin: 0 auto; }
+
+  .counters {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .counter {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .counter .value { font-size: 26px; font-weight: 700; }
+  .counter .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  thead th {
+    text-align: left;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--muted);
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  tbody td {
+    padding: 10px 14px;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr.new-row { animation: flash 1.2s ease-out; }
+  @keyframes flash {
+    from { background: rgba(77, 163, 255, 0.25); }
+    to { background: transparent; }
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .badge.restricted_zone_entry { background: rgba(255, 93, 108, 0.15); color: var(--danger); }
+  .badge.line_crossing { background: rgba(77, 163, 255, 0.15); color: var(--accent); }
+  .badge.dwell_time_exceeded { background: rgba(255, 180, 84, 0.15); color: var(--warn); }
+
+  #empty { color: var(--muted); padding: 24px; text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Video Analytics &mdash; Live Events</h1>
+  <span id="status" class="status disconnected">connecting&hellip;</span>
+</header>
+<main>
+  <div class="counters">
+    <div class="counter"><div class="value" id="count-total">0</div><div class="label">Total events</div></div>
+    <div class="counter"><div class="value" id="count-restricted_zone_entry">0</div><div class="label">Restricted zone entries</div></div>
+    <div class="counter"><div class="value" id="count-line_crossing">0</div><div class="label">Line crossings</div></div>
+    <div class="counter"><div class="value" id="count-dwell_time_exceeded">0</div><div class="label">Dwell exceeded</div></div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th>Camera</th>
+        <th>Event</th>
+        <th>Track ID</th>
+        <th>Confidence</th>
+        <th>Metadata</th>
+      </tr>
+    </thead>
+    <tbody id="event-body"></tbody>
+  </table>
+  <div id="empty">Waiting for events&hellip;</div>
+</main>
+
+<script>
+  const MAX_ROWS = 200;
+  const counts = { total: 0, restricted_zone_entry: 0, line_crossing: 0, dwell_time_exceeded: 0 };
+
+  const statusEl = document.getElementById("status");
+  const bodyEl = document.getElementById("event-body");
+  const emptyEl = document.getElementById("empty");
+
+  function fmtTime(iso) {
+    try {
+      return new Date(iso).toLocaleTimeString();
+    } catch (e) {
+      return iso;
+    }
+  }
+
+  function bumpCounter(key) {
+    counts[key] = (counts[key] || 0) + 1;
+    const el = document.getElementById(`count-${key}`);
+    if (el) el.textContent = counts[key];
+  }
+
+  function renderEvent(evt) {
+    emptyEl.style.display = "none";
+    bumpCounter("total");
+    document.getElementById("count-total").textContent = counts.total;
+    if (evt.event_type) bumpCounter(evt.event_type);
+
+    const row = document.createElement("tr");
+    row.className = "new-row";
+    row.innerHTML = `
+      <td>${fmtTime(evt.timestamp)}</td>
+      <td>${evt.camera_id ?? ""}</td>
+      <td><span class="badge ${evt.event_type}">${evt.event_type}</span></td>
+      <td>${evt.track_id ?? ""}</td>
+      <td>${(evt.confidence ?? 0).toFixed ? evt.confidence.toFixed(2) : evt.confidence}</td>
+      <td>${JSON.stringify(evt.metadata ?? {})}</td>
+    `;
+    bodyEl.prepend(row);
+    while (bodyEl.children.length > MAX_ROWS) {
+      bodyEl.removeChild(bodyEl.lastChild);
+    }
+  }
+
+  async function loadRecent() {
+    try {
+      const res = await fetch("/events");
+      const events = await res.json();
+      events.forEach(renderEvent);
+    } catch (e) {
+      console.warn("Could not load recent events", e);
+    }
+  }
+
+  function connect() {
+    const proto = window.location.protocol === "https:" ? "wss" : "ws";
+    const ws = new WebSocket(`${proto}://${window.location.host}/ws/live`);
+
+    ws.onopen = () => {
+      statusEl.textContent = "connected";
+      statusEl.className = "status connected";
+    };
+    ws.onclose = () => {
+      statusEl.textContent = "disconnected - retrying...";
+      statusEl.className = "status disconnected";
+      setTimeout(connect, 2000);
+    };
+    ws.onerror = () => ws.close();
+    ws.onmessage = (msg) => {
+      try {
+        renderEvent(JSON.parse(msg.data));
+      } catch (e) {
+        console.warn("bad event payload", e);
+      }
+    };
+  }
+
+  loadRecent();
+  connect();
+</script>
+</body>
+</html>

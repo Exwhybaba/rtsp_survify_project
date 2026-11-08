@@ -1,0 +1,59 @@
+version: "3.9"
+
+# Three services: the MQTT broker events flow through, the analytics
+# pipeline that produces them, and the dashboard that consumes/relays
+# them to a browser. Run `python scripts/generate_demo_video.py` once
+# locally before `docker compose up` so demo-media/demo.mp4 exists for
+# the analytics container to read (it's git-ignored, so it must be
+# generated, not pulled from source control).
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    restart: unless-stopped
+
+  analytics:
+    build: .
+    depends_on:
+      - mosquitto
+    environment:
+      MQTT_HOST: mosquitto
+      MQTT_PORT: "1883"
+    volumes:
+      - ./demo-media:/app/demo-media:ro
+      - ./config:/app/config:ro
+      - ./evidence:/app/evidence
+    command: ["python", "-m", "src.analytics.pipeline", "--config", "config/pipeline.yaml"]
+    restart: unless-stopped
+
+  dashboard:
+    build: .
+    depends_on:
+      - mosquitto
+    environment:
+      MQTT_HOST: mosquitto
+      MQTT_PORT: "1883"
+      MQTT_TOPIC: analytics/events
+      EVIDENCE_DIR: /app/evidence
+    volumes:
+      - ./evidence:/app/evidence:ro
+    ports:
+      - "8000:8000"
+    command: ["uvicorn", "src.dashboard.api:app", "--host", "0.0.0.0", "--port", "8000"]
+    restart: unless-stopped
+
+  # React + TypeScript dashboard UI (frontend/). Multi-stage build: Vite
+  # compiles the static bundle, nginx serves it and reverse-proxies
+  # /events, /health, and /ws/ to `dashboard` (see frontend/nginx.conf) so
+  # the browser only ever talks to one origin. Served on 5173 so it never
+  # collides with the existing plain-HTML dashboard on 8000.
+  dashboard-ui:
+    build: ../frontend
+    depends_on:
+      - dashboard
+    ports:
+      - "5173:80"
+    restart: unless-stopped

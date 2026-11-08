@@ -1,0 +1,682 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Suvirfy CCTV Monitoring Dashboard</title>
+
+    <!-- MQTT.js -->
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 24px;
+            font-family: Arial, sans-serif;
+            background: #f4f6f5;
+            color: #1f2937;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: auto;
+        }
+
+        header {
+            margin-bottom: 24px;
+        }
+
+        header h1 {
+            margin: 0 0 6px;
+            font-size: 25px;
+        }
+
+        header p {
+            margin: 0;
+            color: #64748b;
+        }
+
+        .panel {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .panel h2 {
+            margin: 0 0 16px;
+            font-size: 18px;
+        }
+
+        /* Video section */
+
+        .video-controls {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        #video-picker {
+            max-width: 100%;
+        }
+
+        #video-name {
+            color: #64748b;
+            font-size: 13px;
+        }
+
+        .video-container {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            background: #111827;
+            border-radius: 8px;
+            padding: 12px;
+            min-height: 120px;
+        }
+
+        #demo-video {
+            display: none;
+            width: 100%;
+            max-width: 750px;
+            max-height: 420px;
+            object-fit: contain;
+            background: #000;
+            border-radius: 6px;
+        }
+
+        #video-placeholder {
+            color: #cbd5e1;
+            text-align: center;
+            align-self: center;
+            padding: 30px 10px;
+        }
+
+        /* Connection status */
+
+        .status-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #94a3b8;
+        }
+
+        .status-dot.connected {
+            background: #16a34a;
+        }
+
+        .status-dot.disconnected {
+            background: #dc2626;
+        }
+
+        #connection-status {
+            font-size: 13px;
+            color: #64748b;
+        }
+
+        /* Events table */
+
+        .table-wrapper {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 750px;
+        }
+
+        th,
+        td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 13px;
+            vertical-align: middle;
+        }
+
+        th {
+            background: #f8fafc;
+            color: #475569;
+            font-weight: 600;
+        }
+
+        td img {
+            max-width: 150px;
+            max-height: 90px;
+            object-fit: contain;
+            border-radius: 5px;
+        }
+
+        .event-type {
+            font-weight: 600;
+            color: #166534;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #94a3b8;
+            padding: 30px;
+        }
+
+        .clear-button {
+            border: none;
+            background: #e2e8f0;
+            color: #334155;
+            padding: 8px 14px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .clear-button:hover {
+            background: #cbd5e1;
+        }
+
+        .event-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .event-header h2 {
+            margin: 0;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 12px;
+            }
+
+            .panel {
+                padding: 14px;
+            }
+
+            #demo-video {
+                max-height: 280px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <header>
+        <h1>Suvirfy CCTV Monitoring Dashboard</h1>
+        <p>Real-time computer vision monitoring and event analytics</p>
+    </header>
+
+    <!-- VIDEO PLAYER -->
+    <section class="panel">
+
+        <h2>Video Monitor</h2>
+
+        <div class="video-controls">
+            <input
+                type="file"
+                id="video-picker"
+                accept="video/*"
+            >
+
+            <span id="video-name">No video selected</span>
+        </div>
+
+        <div class="video-container">
+
+            <div id="video-placeholder">
+                Select a video from your computer to display it here.
+            </div>
+
+            <video
+                id="demo-video"
+                controls
+                playsinline
+                preload="metadata"
+            >
+                Your browser does not support video playback.
+            </video>
+
+        </div>
+
+    </section>
+
+    <!-- CONNECTION STATUS -->
+    <section class="panel">
+
+        <h2>System Connection</h2>
+
+        <div class="status-row">
+            <span id="status-dot" class="status-dot"></span>
+            <span id="connection-status">Connecting to MQTT broker...</span>
+        </div>
+
+    </section>
+
+    <!-- EVENTS TABLE -->
+    <section class="panel">
+
+        <div class="event-header">
+            <h2>Detection Events</h2>
+            <button class="clear-button" id="clear-events">
+                Clear Events
+            </button>
+        </div>
+
+        <div class="table-wrapper">
+
+            <table>
+
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Event</th>
+                        <th>Camera</th>
+                        <th>Track ID</th>
+                        <th>Zone</th>
+                        <th>Evidence</th>
+                        <th>Details</th>
+                    </tr>
+                </thead>
+
+                <tbody id="events-body">
+
+                    <tr id="empty-row">
+                        <td colspan="7" class="empty-state">
+                            Waiting for detection events...
+                        </td>
+                    </tr>
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </section>
+
+</div>
+
+<script>
+    // --------------------------------------------------
+    // VIDEO PLAYER
+    // --------------------------------------------------
+
+    const videoPicker = document.getElementById("video-picker");
+    const demoVideo = document.getElementById("demo-video");
+    const videoPlaceholder = document.getElementById("video-placeholder");
+    const videoName = document.getElementById("video-name");
+
+    let currentVideoUrl = null;
+
+    videoPicker.addEventListener("change", () => {
+
+        const file = videoPicker.files[0];
+
+        if (!file) return;
+
+        if (!file.type.startsWith("video/")) {
+            alert("Please select a valid video file.");
+            videoPicker.value = "";
+            return;
+        }
+
+        // Release the previous video URL.
+        if (currentVideoUrl) {
+            URL.revokeObjectURL(currentVideoUrl);
+        }
+
+        // Create a temporary browser URL for the selected file.
+        currentVideoUrl = URL.createObjectURL(file);
+
+        demoVideo.src = currentVideoUrl;
+        demoVideo.style.display = "block";
+
+        videoPlaceholder.style.display = "none";
+        videoName.textContent = file.name;
+
+        demoVideo.load();
+    });
+
+    // Release browser resources when the page is closed.
+    window.addEventListener("beforeunload", () => {
+        if (currentVideoUrl) {
+            URL.revokeObjectURL(currentVideoUrl);
+        }
+    });
+
+
+    // --------------------------------------------------
+    // MQTT CONNECTION
+    // --------------------------------------------------
+
+    const params = new URLSearchParams(window.location.search);
+
+    const broker =
+        params.get("broker") ||
+        `ws://${window.location.hostname}:9001`;
+
+    const baseTopic =
+        params.get("topic") ||
+        "analytics/events";
+
+    const evidenceBase =
+        params.get("evidence") || "";
+
+    const statusDot = document.getElementById("status-dot");
+    const connectionStatus = document.getElementById("connection-status");
+    const eventsBody = document.getElementById("events-body");
+
+    let mqttClient = null;
+
+    function setConnectionStatus(connected, message) {
+
+        statusDot.className = connected
+            ? "status-dot connected"
+            : "status-dot disconnected";
+
+        connectionStatus.textContent = message;
+    }
+
+    function connectMQTT() {
+
+        if (typeof mqtt === "undefined") {
+            setConnectionStatus(false, "MQTT.js failed to load.");
+            return;
+        }
+
+        setConnectionStatus(false, "Connecting to " + broker);
+
+        mqttClient = mqtt.connect(broker, {
+            reconnectPeriod: 3000,
+            connectTimeout: 10000
+        });
+
+        mqttClient.on("connect", () => {
+
+            setConnectionStatus(true, "Connected to MQTT broker");
+
+            mqttClient.subscribe(baseTopic, (error) => {
+
+                if (error) {
+                    console.error("MQTT subscription error:", error);
+                } else {
+                    console.log("Subscribed to:", baseTopic);
+                }
+
+            });
+
+        });
+
+        mqttClient.on("reconnect", () => {
+            setConnectionStatus(false, "Reconnecting to MQTT broker...");
+        });
+
+        mqttClient.on("offline", () => {
+            setConnectionStatus(false, "MQTT broker offline");
+        });
+
+        mqttClient.on("error", (error) => {
+            console.error("MQTT error:", error);
+            setConnectionStatus(false, "MQTT connection error");
+        });
+
+        mqttClient.on("message", (topic, message) => {
+
+            try {
+
+                const event = JSON.parse(message.toString());
+
+                console.log("MQTT event:", topic, event);
+
+                renderEvent(event);
+
+            } catch (error) {
+
+                console.error("Could not parse MQTT message:", error);
+
+            }
+
+        });
+    }
+
+
+    // --------------------------------------------------
+    // EVENT DISPLAY
+    // --------------------------------------------------
+
+    function getValue(event, possibleKeys) {
+
+        for (const key of possibleKeys) {
+
+            if (
+                event[key] !== undefined &&
+                event[key] !== null &&
+                event[key] !== ""
+            ) {
+                return event[key];
+            }
+
+        }
+
+        return "-";
+    }
+
+    function formatTime(event) {
+
+        const timestamp = getValue(
+            event,
+            ["timestamp", "event_time", "created_at", "time"]
+        );
+
+        if (timestamp === "-") {
+            return new Date().toLocaleTimeString();
+        }
+
+        const date = new Date(timestamp);
+
+        return isNaN(date.getTime())
+            ? String(timestamp)
+            : date.toLocaleString();
+    }
+
+    function getEvidenceUrl(event) {
+
+        const path = getValue(
+            event,
+            [
+                "snapshot_url",
+                "evidence_url",
+                "snapshot",
+                "image_url",
+                "evidence_path"
+            ]
+        );
+
+        if (path === "-") return null;
+
+        if (
+            path.startsWith("http://") ||
+            path.startsWith("https://") ||
+            path.startsWith("blob:")
+        ) {
+            return path;
+        }
+
+        const normalizedPath = String(path)
+            .replace(/\\/g, "/")
+            .replace(/^\/+/, "")
+            .replace(/^evidence\//, "");
+
+        if (!evidenceBase) {
+            return "/" + normalizedPath;
+        }
+
+        return evidenceBase.replace(/\/+$/, "") +
+            "/" + normalizedPath;
+    }
+
+    function renderEvent(event) {
+
+        // Evidence-ready messages may be notifications
+        // that an evidence file has become available.
+        if (event.type === "evidence_ready") {
+            console.log("Evidence ready:", event);
+            return;
+        }
+
+        const emptyRow = document.getElementById("empty-row");
+
+        if (emptyRow) {
+            emptyRow.remove();
+        }
+
+        const row = document.createElement("tr");
+
+        const time = formatTime(event);
+
+        const eventType = getValue(
+            event,
+            ["event_type", "type", "rule", "event"]
+        );
+
+        const camera = getValue(
+            event,
+            ["camera_id", "camera", "source_id"]
+        );
+
+        const trackId = getValue(
+            event,
+            ["track_id", "object_id"]
+        );
+
+        const zone = getValue(
+            event,
+            ["zone_id", "zone_name", "zone"]
+        );
+
+        const evidenceUrl = getEvidenceUrl(event);
+
+        const details = getValue(
+            event,
+            ["description", "message", "details", "reason"]
+        );
+
+        const values = [
+            time,
+            eventType,
+            camera,
+            trackId,
+            zone
+        ];
+
+        values.forEach((value, index) => {
+
+            const cell = document.createElement("td");
+
+            cell.textContent = value;
+
+            if (index === 1) {
+                cell.className = "event-type";
+            }
+
+            row.appendChild(cell);
+
+        });
+
+        // Evidence column
+        const evidenceCell = document.createElement("td");
+
+        if (evidenceUrl) {
+
+            const link = document.createElement("a");
+
+            link.href = evidenceUrl;
+            link.target = "_blank";
+            link.rel = "noopener noreferrer";
+            link.textContent = "View evidence";
+
+            evidenceCell.appendChild(link);
+
+            const image = document.createElement("img");
+
+            image.src = evidenceUrl;
+            image.alt = "Event evidence";
+
+            image.style.display = "block";
+            image.style.marginTop = "6px";
+
+            image.onerror = () => {
+                image.style.display = "none";
+            };
+
+            evidenceCell.appendChild(image);
+
+        } else {
+
+            evidenceCell.textContent = "Not available";
+
+        }
+
+        row.appendChild(evidenceCell);
+
+        // Details column
+        const detailsCell = document.createElement("td");
+
+        detailsCell.textContent = details;
+
+        row.appendChild(detailsCell);
+
+        // Newest events appear first.
+        eventsBody.prepend(row);
+
+    }
+
+
+    // --------------------------------------------------
+    // CLEAR EVENTS
+    // --------------------------------------------------
+
+    document.getElementById("clear-events").addEventListener(
+        "click",
+        () => {
+
+            eventsBody.innerHTML = `
+                <tr id="empty-row">
+                    <td colspan="7" class="empty-state">
+                        Waiting for detection events...
+                    </td>
+                </tr>
+            `;
+
+        }
+    );
+
+
+    // --------------------------------------------------
+    // START APPLICATION
+    // --------------------------------------------------
+
+    connectMQTT();
+
+</script>
+
+</body>
+</html>

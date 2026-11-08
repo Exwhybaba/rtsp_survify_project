@@ -1,0 +1,33 @@
+# Core CV / model
+# The tracking visualizer opens an OpenCV window. Use headless OpenCV only in
+# deployments where no local display is required.
+opencv-python>=4.9,<5
+numpy>=1.26,<2.3
+# Keep the local CPU inference stack on a stable Windows-compatible release.
+torch==2.5.1
+torchvision==0.20.1
+ultralytics>=8.2,<9
+supervision>=0.31,<1
+trackers>=2.6,<3
+
+# Zone config
+PyYAML>=6.0,<7
+tzdata>=2024.1
+
+# Data validation
+pydantic>=2.6,<3
+
+# Messaging
+paho-mqtt>=1.6,<3
+requests>=2.31,<3
+
+# Dashboard
+fastapi>=0.110,<1
+python-multipart>=0.0.9,<1
+uvicorn[standard]>=0.29,<1
+websockets>=12.0,<13
+
+# Dev / test / lint
+pytest>=8.0,<9
+httpx>=0.27,<1
+ruff>=0.4,<1

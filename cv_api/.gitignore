@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment / secrets
+.env
+.env.*
+*.pem
+*.key
+
+# Video / media artifacts (never commit binary demo footage)
+*.mp4
+*.avi
+*.mov
+*.mkv
+demo-media/
+
+# Model weights (auto-downloaded by ultralytics at runtime)
+*.pt
+*.onnx
+*.engine
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Frontend (frontend/) -- Vite + React + TypeScript dashboard
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/npm-debug.log*
+playwright-report/
+frontend/test-results/
